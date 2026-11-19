@@ -76,4 +76,5 @@ it gets there. Leave `teaser` out only when the moment's first line is already t
 - `title`: post title (YouTube Shorts / TikTok), sentence case, under 70 characters.
 - `caption`: 1-2 short lines + a question that gets comments. Emoji fine here. No links.
 - `hashtags`: 4-6, topic + creator name tag when known + `#shorts`.
+- Optional `fixes`: `{"Korn": "Corn"}` corrects words the speech-to-text got wrong in the captions.
 - Optional `layout`: `"cam"` (face crop) or `"gameplay"` (blurred full frame) to override detection.

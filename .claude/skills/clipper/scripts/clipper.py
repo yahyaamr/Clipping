@@ -412,9 +412,13 @@ def layout_filter(fc, VW, VH, inp, out):
         cw = int(min(VW, VH * 9 / 16)) // 2 * 2
         cx = int(min(max(0, fx + fw / 2 - cw / 2), VW - cw))
         return f"[{inp}]crop={cw}:{VH - VH % 2}:{cx}:0,scale={W}:{H}:flags=lanczos[{out}]", 300, 1300
+    # full frame enlarged ~33% (trims a little off each side) over a blurred fill: action stays big on a phone
+    fg_h = min(int(W * VH / VW * float(os.environ.get("CLIPPER_FG_ZOOM", "1.33"))), 1100) // 2 * 2
     chain = (f"[{inp}]split[{out}a][{out}b];[{out}a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-             f"boxblur=30:3,eq=brightness=-0.15[{out}bg];[{out}b]scale={W}:-2[{out}fg];[{out}bg][{out}fg]overlay=0:(H-h)/2[{out}]")
-    return chain, 420, 1420
+             f"boxblur=30:3,eq=brightness=-0.15[{out}bg];[{out}b]scale=-2:{fg_h}:flags=lanczos,crop={W}:{fg_h}[{out}fg];"
+             f"[{out}bg][{out}fg]overlay=0:(H-h)/2[{out}]")
+    top = (H - fg_h) // 2
+    return chain, max(170, top - 130), min(H - 260, top + fg_h + 110)
 
 
 # ---------------------------------------------------------------- captions (animated ASS)
@@ -585,6 +589,12 @@ def render_one(rd, info, c, n, cookies, keep, watermark):
                     words.pop()
             words.append({"t": w["t"], "s": s, "e": e})
         off += d - TRANS
+
+    fixes = {k.lower(): v for k, v in (c.get("fixes") or {}).items()}   # per-pick caption corrections
+    for w in words:
+        core = re.sub(r"[^\w']", "", w["t"]).lower()
+        if core in fixes:
+            w["t"] = w["t"].replace(re.sub(r"[^\w']", "", w["t"]), fixes[core])
 
     # video graph
     inputs, fcx = [], []
