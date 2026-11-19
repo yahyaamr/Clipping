@@ -444,7 +444,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Inter Black,92,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,7,4,5,50,50,0
+Style: Cap,Inter Black,84,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,7,4,5,50,50,0
 Style: Hook,Inter Black,62,&H00101010,&H00101010,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,24,0,5,100,100,0
 Style: Bar,Inter Black,10,&H0000E5FF,&H0000E5FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0
 Style: Wm,Inter ExtraBold,36,&H66FFFFFF,&H66FFFFFF,&H66000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,0,0,80
@@ -452,28 +452,39 @@ Style: Wm,Inter ExtraBold,36,&H66FFFFFF,&H66FFFFFF,&H66000000,&H00000000,0,0,0,0
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+    # Readable captions: phrases of up to CAP_WORDS words, each held >= CAP_MIN seconds (fast talkers get
+    # longer phrases, not faster flicker). Only the colour moves word to word; the phrase pops in once.
+    max_words = int(os.environ.get("CLIPPER_CAP_WORDS", "4"))
+    min_hold = float(os.environ.get("CLIPPER_CAP_MIN", "0.9"))
     groups, cur = [], []
     for w in words:
-        if cur and (len(cur) >= 3 or len(" ".join(x["t"] for x in cur)) >= 15
-                    or w["s"] - cur[-1]["e"] > 0.45 or re.search(r"[.?!,]$", cur[-1]["t"])):
-            groups.append(cur)
-            cur = []
+        if cur:
+            text = " ".join(x["t"] for x in cur + [w])
+            held = cur[-1]["e"] - cur[0]["s"]
+            pause = w["s"] - cur[-1]["e"] > 0.6
+            full = len(cur) >= max_words or len(text) > 24
+            sentence_end = re.search(r"[.?!]$", cur[-1]["t"]) or w.get("p") != cur[-1].get("p")
+            if pause or full or sentence_end or (re.search(r",$", cur[-1]["t"]) and held >= min_hold):
+                groups.append(cur)
+                cur = []
         cur.append(w)
     if cur:
         groups.append(cur)
     ev = []
     for gi, g in enumerate(groups):
         color = HILITE[gi % len(HILITE)]
+        g_start = g[0]["s"]
+        nxt = groups[gi + 1][0]["s"] if gi + 1 < len(groups) else total
+        g_end = min(max(g[-1]["e"] + 0.25, g_start + min_hold), nxt, total)   # hold until the next phrase
         for i, w in enumerate(g):
-            t1 = g[i + 1]["s"] if i + 1 < len(g) else max(w["e"], w["s"] + 0.15)
-            if t1 <= w["s"]:
+            t0 = g_start if i == 0 else w["s"]
+            t1 = g[i + 1]["s"] if i + 1 < len(g) else g_end
+            if t1 - t0 < 0.02:
                 continue
-            txt = []
-            for j, x in enumerate(g):
-                word = esc(x["t"].upper())
-                txt.append(r"{\c" + color + r"\fscx118\fscy118\t(0,90,\fscx100\fscy100)}" + word + r"{\r}" if j == i else word)
-            pop = r"\fscx75\fscy75\t(0,90,\fscx100\fscy100)" if i == 0 else ""
-            ev.append(f"Dialogue: 1,{ats(w['s'])},{ats(t1)},Cap,,0,0,0,,{{\\pos({W // 2},{cap_y}){pop}}}" + " ".join(txt))
+            txt = [r"{\c" + color + "}" + esc(x["t"].upper()) + r"{\r}" if j == i else esc(x["t"].upper())
+                   for j, x in enumerate(g)]
+            pop = r"\fscx80\fscy80\t(0,120,\fscx100\fscy100)" if i == 0 else ""
+            ev.append(f"Dialogue: 1,{ats(t0)},{ats(t1)},Cap,,0,0,0,,{{\\pos({W // 2},{cap_y}){pop}}}" + " ".join(txt))
     if hook:  # hook title card: pops in with a little tilt, holds 3.2 s, fades
         ev.append(f"Dialogue: 2,{ats(0)},{ats(min(3.2, total))},Hook,,0,0,0,,"
                   f"{{\\pos({W // 2},{hook_y})\\fad(0,250)\\fscx55\\fscy55\\frz-4\\t(0,170,\\fscx107\\fscy107\\frz2)"
@@ -587,7 +598,7 @@ def render_one(rd, info, c, n, cookies, keep, watermark):
                 words[-1]["e"] = s
                 if words[-1]["e"] - words[-1]["s"] < 0.05:
                     words.pop()
-            words.append({"t": w["t"], "s": s, "e": e})
+            words.append({"t": w["t"], "s": s, "e": e, "p": tag})
         off += d - TRANS
 
     fixes = {k.lower(): v for k, v in (c.get("fixes") or {}).items()}   # per-pick caption corrections
