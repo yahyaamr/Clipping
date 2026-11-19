@@ -138,7 +138,9 @@ def whisper_model():
     with _FW_LOCK:
         if _FW is None:
             from faster_whisper import WhisperModel
-            _FW = WhisperModel(os.environ.get("CLIPPER_WHISPER_MODEL", "small"),
+            local = Path.home() / ".cache" / "clipper" / "whisper-small"   # installed by setup.sh (from npm)
+            name = os.environ.get("CLIPPER_WHISPER_MODEL") or (str(local) if (local / "model.bin").exists() else "small")
+            _FW = WhisperModel(name,
                                device=os.environ.get("CLIPPER_WHISPER_DEVICE", "auto"),
                                compute_type=os.environ.get("CLIPPER_WHISPER_COMPUTE", "int8"), num_workers=2)
     return _FW
@@ -157,7 +159,8 @@ def transcribe(wav, words=False, language=None):
     segs = []
     for s in it:
         if words:
-            segs += [{"start": w.start, "end": w.end, "text": w.word.strip()} for w in (s.words or []) if w.word.strip()]
+            segs += [{"start": w.start, "end": w.end, "text": w.word.strip(), "join": not w.word.startswith(" ")}
+                     for w in (s.words or []) if w.word.strip()]
         elif s.text.strip():
             segs.append({"start": s.start, "end": s.end, "text": s.text.strip()})
     return segs, info.language
@@ -488,8 +491,9 @@ def clip_words(src, ss, dur, work, lang, tag):
         t = s["text"].strip()
         if not t or re.fullmatch(r"\[.*\]|\(.*\)", t):
             continue
-        if re.fullmatch(r"[^\w]+", t) and words:
+        if words and (re.fullmatch(r"[^\w]+", t) or (s.get("join") and s["start"] - words[-1]["e"] < 0.3)):
             words[-1]["t"] += t
+            words[-1]["e"] = min(s["end"], dur)
             continue
         words.append({"t": t, "s": s["start"], "e": min(s["end"], dur)})
     wav.unlink(missing_ok=True)

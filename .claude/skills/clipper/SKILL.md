@@ -15,8 +15,9 @@ Everything except the picking runs locally. The picking is done by YOU (this Cla
 
 `bash "$S/scripts/setup.sh"` (timeout 600000). Installs yt-dlp, faster-whisper, OpenCV 4, Pillow and downloads
 the Whisper model. Prints READY or what's missing.
-Network needed: youtube.com + googlevideo.com (or the stream site) for links, huggingface.co for the Whisper
-model. In a cloud session where a host is blocked, tell the user which host and that they can allow it in the
+The Whisper model comes from the npm registry (checksum-verified) into `~/.cache/clipper/whisper-small`,
+so huggingface.co is not needed. Network needed: youtube.com + googlevideo.com (or the stream site) for links.
+In a cloud session where a host is blocked, tell the user which host and that they can allow it in the
 environment's network settings, or upload the video file and pass its path instead of a URL.
 
 ## 1+2. Prep
