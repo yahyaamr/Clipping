@@ -1,0 +1,12 @@
+{
+  "name": "stickman-shorts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Code-animated stickman motivation shorts (1080x1920, 30fps)",
+  "scripts": {
+    "render": "node render.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.65"
+  }
+}
